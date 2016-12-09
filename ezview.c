@@ -28,6 +28,8 @@ Vertex vertexes[] = {
 	{ { 0.99999, -0.99999 },{ 0.99999, 0.99999 } }
 };
 
+Transformations trans = { 0, 1, 0, 0, 0, 0 };
+
 // Same vertex shader from the texDemo
 static const char* vertex_shader_text =
 "uniform mat4 MVP;\n"
@@ -53,8 +55,8 @@ static const char* fragment_shader_text =
 int main(int argc, char *argv[])
 {
 	GLFWwindow* window;
-	GLuint vertex_buffer, vertex_shader, fragment_shader, program;
-	GLint mvp_location, vpos_location;
+	GLuint program;
+	GLint mvp_location;
 
 	// Load the image into a buffer
 	Pixmap *buffer = (Pixmap *)malloc(sizeof(Pixmap));
@@ -160,9 +162,29 @@ void update_window(GLFWwindow *window, GLuint program, GLint mvp_location) {
 	while (!glfwWindowShouldClose(window))
 	{
 		int width, height;
-		mat4x4 mvp;
-		mat4x4_identity(mvp);
 
+		//initialize transformation matricies
+		mat4x4 r, h, s, t, rh, rhs, mvp;
+
+		//add current values into the appropriate locations for each transformation matrix
+		mat4x4_identity(s);
+		s[0][0] = s[0][0] * trans.scale;
+		s[1][1] = s[1][1] * trans.scale;
+
+		mat4x4_identity(r);
+		mat4x4_rotate_Z(r, r, trans.rotation);
+
+		mat4x4_identity(t);
+		mat4x4_translate(t, trans.translateX, trans.translateY, 0);
+
+		mat4x4_identity(h);
+		h[0][1] = trans.shearX;
+		h[1][0] = trans.shearY;
+
+		//transform the image (final MVP = ((R*H)*S)*T))
+		mat4x4_mul(rh, r, h);
+		mat4x4_mul(rhs, rh, s);
+		mat4x4_mul(mvp, rhs, t);
 
 		glfwGetFramebufferSize(window, &width, &height);
 
@@ -183,8 +205,28 @@ void update_window(GLFWwindow *window, GLuint program, GLint mvp_location) {
 // Handle for the user input transoformations
 static void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
-	// Use ESC to quit the program
+	// Hit escape to quite the ez-view program
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) glfwSetWindowShouldClose(window, GLFW_TRUE);
+
+	// Zoom in and out using R and F
+	if (key == GLFW_KEY_R && action == GLFW_PRESS) trans.scale *= SCALE_UP;
+	if (key == GLFW_KEY_F && action == GLFW_PRESS) trans.scale *= SCALE_DOWN;
+
+	// translate operations using arrow keys
+	if (key == GLFW_KEY_UP && action == GLFW_PRESS) trans.translateY += MIN_TRANS;
+	if (key == GLFW_KEY_DOWN && action == GLFW_PRESS) trans.translateY -= MIN_TRANS;
+	if (key == GLFW_KEY_RIGHT && action == GLFW_PRESS) trans.translateX += MIN_TRANS;
+	if (key == GLFW_KEY_LEFT && action == GLFW_PRESS) trans.translateX -= MIN_TRANS;
+
+	// rotate 90 degrees using Q and E
+	if (key == GLFW_KEY_Q && action == GLFW_PRESS) trans.rotation += NINETY_DEG;
+	if (key == GLFW_KEY_E && action == GLFW_PRESS) trans.rotation -= NINETY_DEG;
+
+	// Shear image using WASD
+	if (key == GLFW_KEY_D && action == GLFW_PRESS) trans.shearY += MIN_TRANS;
+	if (key == GLFW_KEY_A && action == GLFW_PRESS) trans.shearY -= MIN_TRANS;
+	if (key == GLFW_KEY_W && action == GLFW_PRESS) trans.shearX += MIN_TRANS;
+	if (key == GLFW_KEY_S && action == GLFW_PRESS) trans.shearX -= MIN_TRANS;
 }
 
 // shade compile checker from demo, checks if shader compiles correctly
@@ -215,7 +257,7 @@ void glLinkProgramOrDie(GLuint program)
 
 	if (!link_success)
 	{
-		GLchar message[256];
+		GLchar message[MSG_MAX];
 		glGetProgramInfoLog(program, sizeof(message), 0, &message[0]);
 		printf("Error: unable to link program %s\n", message);
 		exit(-1);
@@ -285,7 +327,7 @@ void load_ppm(char *filename, Pixmap *buffer) {
 	printf("load_ppm entered");
 	FILE *file;
 
-	if (file = fopen(filename, "r")) {
+	if (file = fopen(filename, "rb")) {
 		PPMHeader myHeader;
 		myHeader = get_header_info(file);
 		int size = myHeader.width * myHeader.height * 3;
@@ -311,7 +353,15 @@ void load_ppm(char *filename, Pixmap *buffer) {
 		}
 
 		else if (strcmp("P6", myHeader.format) == 0) {
-			fread((void *)buffer->image, 1, (size_t)size, file);
+			while (1) {
+				int data_char = getc(file);
+				if (data_char != EOF) {
+					buffer->image[current_pixel++] = data_char;
+				}
+				else if (data_char == EOF) {
+					break;
+				}
+			}
 		}
 		else {
 			fprintf(stderr, "Error: PPM format read as %s, was not 3 or 6.\n", myHeader.format);

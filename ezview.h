@@ -10,6 +10,12 @@
 #define COLOR_DEPTH 255
 #define HEAD_ELEM 4
 #define HEAD_ELEM_MAX_LEN 64
+#define PI 3.1415926535897
+#define NINETY_DEG 90 * PI / 180;
+#define MIN_TRANS 0.2
+#define SCALE_UP 2
+#define SCALE_DOWN 0.5
+#define MSG_MAX 256
 
 
 /*************
@@ -41,6 +47,17 @@ typedef struct PPMHeader
 	int max_depth;
 } PPMHeader;
 
+//struct to store transformation information
+typedef struct Transformations
+{
+	double rotation;
+	double scale;
+	double translateX;
+	double translateY;
+	double shearX;
+	double shearY;
+} Transformations;
+
 
 /*************
 * Prototypes
@@ -52,7 +69,7 @@ void glCompileShaderOrDie(GLuint shader);
 void glLinkProgramOrDie(GLuint program);
 void init_window(Pixmap *buffer, GLFWwindow *window);
 void init_image(Pixmap *buffer, GLint *mvp_location, GLuint *program);
-void update_window(GLFWwindow *window, GLuint *program, GLint *mvp_location);
+void update_window(GLFWwindow *window, GLuint program, GLint mvp_location);
 
 PPMHeader get_header_info(FILE *file);
 void load_ppm(char *filename, Pixmap *buffer);
